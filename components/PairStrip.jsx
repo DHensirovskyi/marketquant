@@ -35,12 +35,12 @@ export function PairStrip({ pair, range }) {
               Аналітика {displayPair}
             </h1>
             <Badge tone="emerald">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 live-dot" />
-              Live
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+              Static
             </Badge>
           </div>
           <div className="text-sm text-slate-500 dark:text-slate-400">
-            Сесійні метрики · період: {labelRange}
+            Сесійні метрики · період: 6 років
           </div>
         </div>
 
