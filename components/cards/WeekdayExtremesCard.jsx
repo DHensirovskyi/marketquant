@@ -26,10 +26,10 @@ export function WeekdayExtremesCard(props) {
           </span>
         </div>
       </div>
-      <div className="flex items-end gap-3 h-32">
+      <div className="flex items-stretch gap-3 h-32">
         {days.map((day, i) => (
-          <div key={day.d} className="flex-1 flex flex-col items-center gap-1.5">
-            <div className="w-full flex-1 flex items-end gap-1">
+          <div key={day.d} className="flex-1 flex flex-col items-center gap-1.5 h-full">
+            <div className="w-full flex-1 flex items-stretch gap-1">
               <div className="flex-1 flex items-end">
                 <div
                   className="w-full bg-emerald-500 dark:bg-emerald-400 rounded-t-sm bar-anim"

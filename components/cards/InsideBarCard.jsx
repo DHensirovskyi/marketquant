@@ -30,9 +30,9 @@ export function InsideBarCard(props) {
       <div className="text-[11px] uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-2">
         Розподіл по днях тижня
       </div>
-      <div className="flex items-end gap-2 h-20">
+      <div className="flex items-stretch gap-2 h-20">
         {days.map((day, i) => (
-          <div key={day.d} className="flex-1 flex flex-col items-center gap-1.5">
+          <div key={day.d} className="flex-1 flex flex-col items-center gap-1.5 h-full">
             <div className="w-full flex-1 flex items-end">
               <div
                 className="w-full bg-indigo-500 dark:bg-indigo-400 rounded-t-sm bar-anim"
