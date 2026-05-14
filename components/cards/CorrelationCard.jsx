@@ -1,34 +1,25 @@
 'use client';
 
-import { useState } from 'react';
 import { GitCompareArrows } from 'lucide-react';
 import { Card } from '../Card';
 import { Select, Badge } from '../primitives';
 
-export function CorrelationCard(props) {
-  const [pair, setPair] = useState('asia-london');
-  const map = {
-    'asia-london': 0.68,
-    'asia-ny': 0.42,
-    'london-ny': 0.81,
-  };
-  const value = map[pair];
+export function CorrelationCard({ pair, onPairChange, value = 0, loading, ...drag }) {
   const abs = Math.abs(value);
   const strength =
-    abs >= 0.7
-      ? { label: 'Сильна', tone: 'emerald' }
-      : abs >= 0.4
-      ? { label: 'Середня', tone: 'amber' }
-      : { label: 'Слабка', tone: 'slate' };
+    abs >= 0.7 ? { label: 'Сильна', tone: 'emerald' } :
+    abs >= 0.4 ? { label: 'Середня', tone: 'amber'  } :
+                 { label: 'Слабка', tone: 'slate'  };
   const dots = 12;
   const filled = Math.round(abs * dots);
+
   return (
-    <Card {...props} title="Кореляція сесій" Icon={GitCompareArrows} accent="indigo">
+    <Card {...drag} title="Кореляція сесій" Icon={GitCompareArrows} accent="indigo">
       <div className="flex items-baseline gap-3 mb-4">
         <div className="text-5xl font-semibold tabular text-slate-900 dark:text-white tracking-tight">
-          {value.toFixed(2)}
+          {loading ? '—' : value.toFixed(2)}
         </div>
-        <Badge tone={strength.tone}>{strength.label}</Badge>
+        {!loading && <Badge tone={strength.tone}>{strength.label}</Badge>}
       </div>
 
       <div className="mb-4">
@@ -37,11 +28,11 @@ export function CorrelationCard(props) {
         </label>
         <Select
           value={pair}
-          onChange={setPair}
+          onChange={onPairChange}
           options={[
             { value: 'asia-london', label: 'Азія → Лондон' },
-            { value: 'asia-ny', label: 'Азія → Нью-Йорк' },
-            { value: 'london-ny', label: 'Лондон → Нью-Йорк' },
+            { value: 'asia-ny',     label: 'Азія → Нью-Йорк' },
+            { value: 'london-ny',   label: 'Лондон → Нью-Йорк' },
           ]}
         />
       </div>
@@ -55,15 +46,12 @@ export function CorrelationCard(props) {
         </div>
         <div className="flex gap-1">
           {Array.from({ length: dots }).map((_, i) => (
-            <span
-              key={i}
+            <span key={i}
               className={`flex-1 h-2 rounded-sm transition-colors ${
                 i < filled
-                  ? i < 4
-                    ? 'bg-slate-400 dark:bg-slate-500'
-                    : i < 8
-                    ? 'bg-amber-400 dark:bg-amber-500'
-                    : 'bg-emerald-500 dark:bg-emerald-400'
+                  ? i < 4 ? 'bg-slate-400 dark:bg-slate-500'
+                  : i < 8 ? 'bg-amber-400 dark:bg-amber-500'
+                          : 'bg-emerald-500 dark:bg-emerald-400'
                   : 'bg-slate-100 dark:bg-slate-800'
               }`}
             />

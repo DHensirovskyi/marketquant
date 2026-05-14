@@ -1,24 +1,21 @@
 'use client';
 
-import { useState } from 'react';
 import { MoonStar } from 'lucide-react';
 import { Card } from '../Card';
 import { NumberInput, ProgressBar } from '../primitives';
 
-export function NYMidnightCard(props) {
-  const [distance, setDistance] = useState(35);
-  const probability = 65;
+export function NYMidnightCard({
+  distance, onDistanceChange, probability = 0, sampleSize = 0, loading, ...drag
+}) {
   return (
-    <Card {...props} title="Перекриття NY Midnight" Icon={MoonStar} accent="indigo">
+    <Card {...drag} title="Перекриття NY Midnight" Icon={MoonStar} accent="indigo">
       <div className="flex items-baseline gap-3 mb-4">
         <div className="text-5xl font-semibold tabular text-slate-900 dark:text-white tracking-tight">
-          {probability}
+          {loading ? '—' : probability}
           <span className="text-2xl text-slate-400 dark:text-slate-500">%</span>
         </div>
         <div className="text-xs text-slate-500 dark:text-slate-400 leading-tight">
-          ймовірність
-          <br />
-          перекриття
+          ймовірність<br />перекриття
         </div>
       </div>
 
@@ -28,19 +25,21 @@ export function NYMidnightCard(props) {
         </label>
         <NumberInput
           value={distance}
-          onChange={(v) => setDistance(Math.max(0, +v || 0))}
+          onChange={(v) => onDistanceChange(Math.max(0, +v || 0))}
           suffix="pips"
         />
       </div>
 
       <div className="space-y-1.5">
         <div className="flex items-center justify-between text-xs">
-          <span className="text-slate-600 dark:text-slate-400">Шкала ймовірності</span>
+          <span className="text-slate-600 dark:text-slate-400">
+            Шкала ймовірності {!loading && sampleSize > 0 ? `· n=${sampleSize}` : ''}
+          </span>
           <span className="font-medium text-slate-900 dark:text-slate-100 tabular">
-            {probability}%
+            {loading ? '—' : `${probability}%`}
           </span>
         </div>
-        <ProgressBar value={probability} />
+        <ProgressBar value={loading ? 0 : probability} />
       </div>
     </Card>
   );

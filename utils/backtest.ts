@@ -1,17 +1,14 @@
 // utils/backtest.ts
 import {
   Bar, DailyBar, SessionId,
-  groupByDay,
+  groupByDay, applyContextFilter,
   calcASR, calcAsiaBreakout, calcSessionExtremes,
   calcInsideBar, calcNYMidnight,
 } from './quantMath';
+import { extractAsiaContext, AsiaContext } from './asiaContext';
 
 const PIP = 0.0001;
 const toPips = (d: number) => Math.round((d / PIP) * 10) / 10;
-
-// ─────────────────────────────────────────────────────────────────────────
-// Per-day "facts" — что реально случилось в этот день
-// ─────────────────────────────────────────────────────────────────────────
 
 function parseUTC(s: string) { return new Date(s.replace(' ', 'T') + 'Z'); }
 function hourOf(b: Bar) { return parseUTC(b.datetime).getUTCHours(); }
@@ -62,8 +59,8 @@ interface DayFacts {
   asiaBreakUp: boolean;
   asiaBreakDown: boolean;
   asiaBreakFirst: 'UP' | 'DOWN' | 'NONE';
-  asiaContinuation: boolean;     // close за уровнем в направлении первого пробоя
-  isInsideBar: boolean | null;   // null если нет предыдущего дня
+  asiaContinuation: boolean;
+  isInsideBar: boolean | null;
   nyMidnightOpen: number | null;
   nyMidnightTriggered: boolean;
   nyMidnightRetouched: boolean;
@@ -72,18 +69,15 @@ interface DayFacts {
 function extractDayFacts(day: DailyBar, prev: DailyBar | null, nyMidDist: number): DayFacts {
   const WD = ['Нд','Пн','Вт','Ср','Чт','Пт','Сб'][day.dayOfWeek];
 
-  // Asia range
   let aH = -Infinity, aL = Infinity, aFound = false;
   for (const b of day.bars) {
-    const h = hourOf(b);
-    if (h < 8) {
+    if (hourOf(b) < 8) {
       aFound = true;
       if (b.high > aH) aH = b.high;
       if (b.low  < aL) aL = b.low;
     }
   }
 
-  // Asia breakout during 8..22
   let upHit = false, downHit = false, firstDir: 'UP'|'DOWN'|'NONE' = 'NONE';
   if (aFound) {
     for (const b of day.bars) {
@@ -98,7 +92,6 @@ function extractDayFacts(day: DailyBar, prev: DailyBar | null, nyMidDist: number
     firstDir === 'UP'   ? day.close > aH :
     firstDir === 'DOWN' ? day.close < aL : false;
 
-  // HOD / LOD session
   let hodBar: Bar | null = null, lodBar: Bar | null = null;
   for (const b of day.bars) {
     if (!hodBar && b.high === day.high) hodBar = b;
@@ -106,10 +99,8 @@ function extractDayFacts(day: DailyBar, prev: DailyBar | null, nyMidDist: number
     if (hodBar && lodBar) break;
   }
 
-  // Inside Bar
   const isIB = prev ? (day.high <= prev.high && day.low >= prev.low) : null;
 
-  // NY Midnight (05:00 UTC bar)
   let nyMidBar: Bar | null = null;
   for (const b of day.bars) {
     const d = parseUTC(b.datetime);
@@ -134,8 +125,7 @@ function extractDayFacts(day: DailyBar, prev: DailyBar | null, nyMidDist: number
   }
 
   return {
-    date: day.date,
-    weekday: WD,
+    date: day.date, weekday: WD,
     open: day.open, high: day.high, low: day.low, close: day.close,
     dayRangePips: toPips(day.high - day.low),
     asiaHigh: aFound ? aH : NaN,
@@ -146,46 +136,35 @@ function extractDayFacts(day: DailyBar, prev: DailyBar | null, nyMidDist: number
     direction: dayDirection(day),
     hodSession: hodBar ? sessionOfBar(hodBar) : null,
     lodSession: lodBar ? sessionOfBar(lodBar) : null,
-    asiaBreakUp: upHit,
-    asiaBreakDown: downHit,
-    asiaBreakFirst: firstDir,
-    asiaContinuation: continuation,
+    asiaBreakUp: upHit, asiaBreakDown: downHit,
+    asiaBreakFirst: firstDir, asiaContinuation: continuation,
     isInsideBar: isIB,
     nyMidnightOpen: nyMidBar?.open ?? null,
-    nyMidnightTriggered: nymTrig,
-    nyMidnightRetouched: nymRetouch,
+    nyMidnightTriggered: nymTrig, nyMidnightRetouched: nymRetouch,
   };
 }
 
-// ─────────────────────────────────────────────────────────────────────────
-// Прогноз на день D, основанный только на историии [0..D-1]
-// ─────────────────────────────────────────────────────────────────────────
-
 interface DayPrediction {
   predDir: 'LONG' | 'SHORT';
-  predDirProb: number;            // вероятность предсказанного класса, %
+  predDirProb: number;
   predHodSession: SessionId;
   predLodSession: SessionId;
-  predBreakProb: number;          // % дней с пробоем Азии
-  predContProb: number;           // continuation
+  predBreakProb: number;
+  predContProb: number;
   predIbProb: number;
   predNymProb: number;
-  predAsrAsia: number;            // pips
+  predAsrAsia: number;
   predAsrLondon: number;
   predAsrNy: number;
   historyDays: number;
 }
 
 function predict(history: DailyBar[], nyMidDist: number): DayPrediction {
-  // ── ASR (как было) ────────────────────────────────────────────────
   const asrA = calcASR(history, 'asian',  Math.min(20, history.length));
   const asrL = calcASR(history, 'london', Math.min(20, history.length));
   const asrN = calcASR(history, 'ny',     Math.min(20, history.length));
 
-  // ── Direction: momentum от вчерашнего дня ────────────────────────
-  const recentForDir = history.slice(-60);
-
-  // База — для случаев когда вчерашний день нейтральный
+  const recentForDir = history.slice(-Math.min(100, history.length));
   let lng = 0, srt = 0;
   for (const d of recentForDir) {
     const dir = dayDirection(d);
@@ -195,64 +174,26 @@ function predict(history: DailyBar[], nyMidDist: number): DayPrediction {
   const tot = lng + srt;
   const longPct  = tot > 0 ? (lng / tot) * 100 : 50;
   const shortPct = 100 - longPct;
+  const predDir: 'LONG' | 'SHORT' = longPct >= shortPct ? 'LONG' : 'SHORT';
+  const predDirProb = Math.round(Math.max(longPct, shortPct));
 
-  const yesterday = history.length > 0 ? history[history.length - 1] : null;
-  let predDir: 'LONG' | 'SHORT';
-  let predDirProb: number;
-
-  if (yesterday) {
-    const yesterdayDir = dayDirection(yesterday);
-    if (yesterdayDir === 'LONG' || yesterdayDir === 'SHORT') {
-      predDir = yesterdayDir;
-      // P(today = yesterdayDir | prev day = yesterdayDir) — на 60 днях
-      let cMatch = 0, cTotal = 0;
-      for (let i = 1; i < recentForDir.length; i++) {
-        const prev = dayDirection(recentForDir[i - 1]);
-        const cur  = dayDirection(recentForDir[i]);
-        if (prev !== 'LONG' && prev !== 'SHORT') continue;
-        if (cur  !== 'LONG' && cur  !== 'SHORT') continue;
-        if (prev !== yesterdayDir) continue;
-        cTotal++;
-        if (cur === yesterdayDir) cMatch++;
-      }
-      predDirProb = cTotal > 0 ? Math.round((cMatch / cTotal) * 100) : 50;
-    } else {
-      predDir = longPct >= shortPct ? 'LONG' : 'SHORT';
-      predDirProb = Math.round(Math.max(longPct, shortPct));
-    }
-  } else {
-    predDir = 'LONG';
-    predDirProb = 50;
-  }
-
-  // ── HOD / LOD — density-weighted argmax ───────────────────────────
-  const sessionHours: Record<SessionId, number> = {
-    asian:  8,   // [0, 8)
-    london: 5,   // [8, 13)
-    ny:     11,  // [13, 24)
-  };
+  const sessionHours: Record<SessionId, number> = { asian: 8, london: 5, ny: 11 };
   const se = calcSessionExtremes(history);
   const argmaxDensity = (key: 'hodPct' | 'lodPct'): SessionId => {
-    let bestS: SessionId = 'london';
-    let bestDensity = -1;
+    let bestS: SessionId = 'london', bestDensity = -1;
     for (const r of se.rows) {
       const density = r[key] / sessionHours[r.session];
-      if (density > bestDensity) {
-        bestDensity = density;
-        bestS = r.session;
-      }
+      if (density > bestDensity) { bestDensity = density; bestS = r.session; }
     }
     return bestS;
   };
 
-  // ── Остальные метрики ────────────────────────────────────────────
   const breakout = calcAsiaBreakout(history);
   const ib       = calcInsideBar(history);
   const nym      = calcNYMidnight(history, nyMidDist);
 
   return {
-    predDir,
-    predDirProb,
+    predDir, predDirProb,
     predHodSession: argmaxDensity('hodPct'),
     predLodSession: argmaxDensity('lodPct'),
     predBreakProb: breakout.probability,
@@ -266,13 +207,22 @@ function predict(history: DailyBar[], nyMidDist: number): DayPrediction {
   };
 }
 
-// ─────────────────────────────────────────────────────────────────────────
-// Главный прогон
-// ─────────────────────────────────────────────────────────────────────────
+function buildAsiaContextForDay(
+  day: DailyBar,
+  history: DailyBar[],
+  dxyBars?: Bar[],
+): AsiaContext {
+  const fakeNow = new Date(day.date + 'T08:01:00Z');
+  return extractAsiaContext(day.bars, history, fakeNow, dxyBars);
+}
+
+// ╔══════════════════════════════════════════════════════════════════════╗
+// ║ Главный прогон                                                       ║
+// ╚══════════════════════════════════════════════════════════════════════╝
 
 export interface BacktestOptions {
-  daysToBacktest: number;       // последние N торговых дней
-  minHistory?: number;          // минимум истории, иначе строка не пишется
+  daysToBacktest: number;
+  minHistory?: number;
   nyMidnightDistance: number;
 }
 
@@ -285,32 +235,56 @@ export interface BacktestProgress {
 export async function runBacktest(
   bars: Bar[],
   opts: BacktestOptions,
-  onProgress?: (p: BacktestProgress) => void
+  onProgress?: (p: BacktestProgress) => void,
+  dxyBars?: Bar[],
 ): Promise<string> {
   const days = groupByDay(bars);
   const minHist = opts.minHistory ?? 60;
   const total = Math.min(opts.daysToBacktest, days.length - minHist);
   if (total <= 0) return '';
 
-  // Берём именно последние N дней
   const startIdx = days.length - total;
 
-  // CSV header
   const headers = [
     'date','weekday','history_days',
-    'pred_dir','actual_dir','dir_hit',
-    'pred_dir_prob_pct',
-    'pred_hod_session','actual_hod_session','hod_hit',
-    'pred_lod_session','actual_lod_session','lod_hit',
-    'pred_asia_break_prob_pct','asia_break_first','asia_break_occurred','break_pred_aligned',
-    'pred_continuation_prob_pct','actual_continuation','cont_pred_aligned',
-    'pred_ib_prob_pct','actual_inside_bar',
-    'pred_nym_prob_pct','nym_triggered','nym_retouched','nym_pred_aligned',
-    'pred_asr_asia_pips','actual_asia_range_pips','asr_asia_err_pips',
-    'pred_asr_london_pips','actual_london_range_pips','asr_london_err_pips',
-    'pred_asr_ny_pips','actual_ny_range_pips','asr_ny_err_pips',
+
+    'asia_width','asia_direction','asia_close_pos','asia_sweep',
+    'asia_range_pips','asia_ratio_adr','asia_gap_pips',
+    'dxy_direction','dxy_change_pct',
+
+    'ctx_filters_applied','ctx_sample_size',
+
+    'pred_dir_global','pred_dir_ctx','actual_dir',
+    'dir_hit_global','dir_hit_ctx',
+    'pred_dir_prob_global','pred_dir_prob_ctx',
+
+    'pred_hod_global','pred_hod_ctx','actual_hod',
+    'hod_hit_global','hod_hit_ctx',
+    'pred_lod_global','pred_lod_ctx','actual_lod',
+    'lod_hit_global','lod_hit_ctx',
+
+    'pred_break_prob_global','pred_break_prob_ctx',
+    'asia_break_first','asia_break_occurred',
+    'break_aligned_global','break_aligned_ctx',
+
+    'pred_cont_prob_global','pred_cont_prob_ctx',
+    'actual_continuation',
+    'cont_aligned_global','cont_aligned_ctx',
+
+    'pred_ib_prob_global','pred_ib_prob_ctx','actual_inside_bar',
+
+    'pred_nym_prob_global','pred_nym_prob_ctx',
+    'nym_triggered','nym_retouched',
+    'nym_aligned_global','nym_aligned_ctx',
+
+    'pred_asr_asia_global','pred_asr_asia_ctx','actual_asia_range',
+    'asr_asia_err_global','asr_asia_err_ctx',
+    'pred_asr_london_global','pred_asr_london_ctx','actual_london_range',
+    'asr_london_err_global','asr_london_err_ctx',
+    'pred_asr_ny_global','pred_asr_ny_ctx','actual_ny_range',
+    'asr_ny_err_global','asr_ny_err_ctx',
+
     'day_open','day_high','day_low','day_close','day_range_pips',
-    'asia_high','asia_low','ny_midnight_open',
   ];
   const rows: string[] = [headers.join(',')];
 
@@ -321,61 +295,143 @@ export async function runBacktest(
 
   for (let i = startIdx; i < days.length; i++) {
     const day = days[i];
-    const history = days.slice(0, i);              // строго до текущего
+    const history = days.slice(0, i);
     const prev = i > 0 ? days[i - 1] : null;
 
-    const pred = predict(history, opts.nyMidnightDistance);
+    const ctx = buildAsiaContextForDay(day, history, dxyBars);
+    const predGlobal = predict(history, opts.nyMidnightDistance);
+
+    let predCtx: DayPrediction;
+    let appliedFilters = 0;
+    let ctxSample = history.length;
+
+    if (ctx.available) {
+      const filtered = applyContextFilter(history, ctx, dxyBars);
+      appliedFilters = filtered.steps.filter(s => s.applied).length;
+      ctxSample = filtered.sampleSize;
+      predCtx = predict(filtered.days, opts.nyMidnightDistance);
+    } else {
+      predCtx = predGlobal;
+    }
+
     const facts = extractDayFacts(day, prev, opts.nyMidnightDistance);
+    const breakOccurred = facts.asiaBreakUp || facts.asiaBreakDown;
 
     const row = [
-      facts.date, facts.weekday, pred.historyDays,
-      pred.predDir, facts.direction, facts.direction === pred.predDir ? 1 : 0,
-      pred.predDirProb,
-      pred.predHodSession, facts.hodSession ?? '', sessionEq(pred.predHodSession, facts.hodSession),
-      pred.predLodSession, facts.lodSession ?? '', sessionEq(pred.predLodSession, facts.lodSession),
-      pred.predBreakProb,
-      facts.asiaBreakFirst, (facts.asiaBreakUp || facts.asiaBreakDown) ? 1 : 0,
-      align(pred.predBreakProb, facts.asiaBreakUp || facts.asiaBreakDown),
-      pred.predContProb, facts.asiaContinuation ? 1 : 0, align(pred.predContProb, facts.asiaContinuation),
-      pred.predIbProb, facts.isInsideBar === null ? '' : (facts.isInsideBar ? 1 : 0),
-      pred.predNymProb, facts.nyMidnightTriggered ? 1 : 0, facts.nyMidnightRetouched ? 1 : 0,
-        facts.nyMidnightTriggered ? align(pred.predNymProb, facts.nyMidnightRetouched) : '',
-      pred.predAsrAsia,   facts.asiaRangePips,   Math.round((facts.asiaRangePips   - pred.predAsrAsia)   * 10) / 10,
-      pred.predAsrLondon, facts.londonRangePips, Math.round((facts.londonRangePips - pred.predAsrLondon) * 10) / 10,
-      pred.predAsrNy,     facts.nyRangePips,     Math.round((facts.nyRangePips     - pred.predAsrNy)     * 10) / 10,
+      facts.date, facts.weekday, predGlobal.historyDays,
+
+      ctx.width, ctx.direction, ctx.closePos, ctx.sweep,
+      ctx.asiaRangePips, ctx.ratioToADR, ctx.gapPips,
+      ctx.dxyDirection, ctx.dxyChangePct,
+
+      appliedFilters, ctxSample,
+
+      predGlobal.predDir, predCtx.predDir, facts.direction,
+      facts.direction === predGlobal.predDir ? 1 : 0,
+      facts.direction === predCtx.predDir    ? 1 : 0,
+      predGlobal.predDirProb, predCtx.predDirProb,
+
+      predGlobal.predHodSession, predCtx.predHodSession, facts.hodSession ?? '',
+      sessionEq(predGlobal.predHodSession, facts.hodSession),
+      sessionEq(predCtx.predHodSession,    facts.hodSession),
+      predGlobal.predLodSession, predCtx.predLodSession, facts.lodSession ?? '',
+      sessionEq(predGlobal.predLodSession, facts.lodSession),
+      sessionEq(predCtx.predLodSession,    facts.lodSession),
+
+      predGlobal.predBreakProb, predCtx.predBreakProb,
+      facts.asiaBreakFirst, breakOccurred ? 1 : 0,
+      align(predGlobal.predBreakProb, breakOccurred),
+      align(predCtx.predBreakProb,    breakOccurred),
+
+      predGlobal.predContProb, predCtx.predContProb,
+      facts.asiaContinuation ? 1 : 0,
+      align(predGlobal.predContProb, facts.asiaContinuation),
+      align(predCtx.predContProb,    facts.asiaContinuation),
+
+      predGlobal.predIbProb, predCtx.predIbProb,
+      facts.isInsideBar === null ? '' : (facts.isInsideBar ? 1 : 0),
+
+      predGlobal.predNymProb, predCtx.predNymProb,
+      facts.nyMidnightTriggered ? 1 : 0, facts.nyMidnightRetouched ? 1 : 0,
+      facts.nyMidnightTriggered ? align(predGlobal.predNymProb, facts.nyMidnightRetouched) : '',
+      facts.nyMidnightTriggered ? align(predCtx.predNymProb,    facts.nyMidnightRetouched) : '',
+
+      predGlobal.predAsrAsia, predCtx.predAsrAsia, facts.asiaRangePips,
+      Math.round((facts.asiaRangePips - predGlobal.predAsrAsia) * 10) / 10,
+      Math.round((facts.asiaRangePips - predCtx.predAsrAsia)    * 10) / 10,
+      predGlobal.predAsrLondon, predCtx.predAsrLondon, facts.londonRangePips,
+      Math.round((facts.londonRangePips - predGlobal.predAsrLondon) * 10) / 10,
+      Math.round((facts.londonRangePips - predCtx.predAsrLondon)    * 10) / 10,
+      predGlobal.predAsrNy, predCtx.predAsrNy, facts.nyRangePips,
+      Math.round((facts.nyRangePips - predGlobal.predAsrNy) * 10) / 10,
+      Math.round((facts.nyRangePips - predCtx.predAsrNy)    * 10) / 10,
+
       facts.open, facts.high, facts.low, facts.close, facts.dayRangePips,
-      Number.isFinite(facts.asiaHigh) ? facts.asiaHigh : '',
-      Number.isFinite(facts.asiaLow)  ? facts.asiaLow  : '',
-      facts.nyMidnightOpen ?? '',
     ];
     rows.push(row.join(','));
 
-    if (onProgress && (i - startIdx) % 5 === 0) {
+    if (onProgress && (i - startIdx) % 10 === 0) {
       onProgress({ done: i - startIdx + 1, total, currentDate: facts.date });
-      await new Promise(r => setTimeout(r, 0));   // отдаём поток UI
+      await new Promise(r => setTimeout(r, 0));
     }
   }
   if (onProgress) onProgress({ done: total, total, currentDate: days[days.length - 1].date });
 
-    // ─── Summary footer ──────────────────────────────────────────────────
-    const sumRow = (label: string, ...vals: (string | number)[]) =>
-    [label, ...vals].join(',');
+  // ─── Summary ──────────────────────────────────────────────
+  const data = rows.slice(1).map(r => r.split(','));
+  const colIdx = (name: string) => headers.indexOf(name);
 
-    const dirHits  = rows.slice(1).map(r => +r.split(',')[5]).filter(Number.isFinite);
-    const hodHits  = rows.slice(1).map(r => +r.split(',')[9]).filter(Number.isFinite);
-    const lodHits  = rows.slice(1).map(r => +r.split(',')[12]).filter(Number.isFinite);
-    const brkAlign = rows.slice(1).map(r => +r.split(',')[16]).filter(Number.isFinite);
-    const avg = (a: number[]) => a.length ? (a.reduce((s, x) => s + x, 0) / a.length) : 0;
+  const avgCol = (name: string, filterFn?: (r: string[]) => boolean) => {
+    const idx = colIdx(name);
+    let s = 0, c = 0;
+    for (const r of data) {
+      if (filterFn && !filterFn(r)) continue;
+      const v = parseFloat(r[idx]);
+      if (Number.isFinite(v)) { s += v; c++; }
+    }
+    return c > 0 ? (s / c).toFixed(3) : 'N/A';
+  };
 
-    rows.push('');
-    rows.push(sumRow('=== SUMMARY ==='));
-    rows.push(sumRow('Total days', total));
-    rows.push(sumRow('Direction hit rate',     avg(dirHits).toFixed(3)));
-    rows.push(sumRow('HOD session hit rate',   avg(hodHits).toFixed(3)));
-    rows.push(sumRow('LOD session hit rate',   avg(lodHits).toFixed(3)));
-    rows.push(sumRow('Asia breakout aligned',  avg(brkAlign).toFixed(3)));
-    rows.push(sumRow('Baseline (random) dir',  '0.500'));
-    rows.push(sumRow('Baseline (random) HOD',  '0.333'));
+  rows.push('');
+  rows.push('=== SUMMARY: GLOBAL vs CTX ===');
+  rows.push(`Metric,Global,Context,Delta,Baseline`);
+  const cmp = (name: string, gCol: string, cCol: string, base: string, filter?: (r: string[]) => boolean) => {
+    const g = avgCol(gCol, filter);
+    const c = avgCol(cCol, filter);
+    const delta = (g !== 'N/A' && c !== 'N/A')
+      ? ((parseFloat(c) - parseFloat(g)) * 100).toFixed(1) + 'pp'
+      : '—';
+    rows.push(`${name},${g},${c},${delta},${base}`);
+  };
+  cmp('Direction hit',     'dir_hit_global',     'dir_hit_ctx',     '0.500');
+  cmp('HOD hit',           'hod_hit_global',     'hod_hit_ctx',     '0.333');
+  cmp('LOD hit',           'lod_hit_global',     'lod_hit_ctx',     '0.333');
+  cmp('Asia breakout aln', 'break_aligned_global','break_aligned_ctx','0.500');
+  cmp('Continuation aln',  'cont_aligned_global','cont_aligned_ctx','0.600');
+  cmp('NYM aligned',       'nym_aligned_global', 'nym_aligned_ctx', '0.500',
+      r => r[colIdx('nym_triggered')] === '1');
+
+  rows.push('');
+  rows.push('=== CONTEXT BREAKDOWN ===');
+  rows.push(`Filters applied,Days,Direction hit (ctx),HOD hit (ctx)`);
+  for (let f = 0; f <= 4; f++) {
+    const sub = data.filter(r => parseInt(r[colIdx('ctx_filters_applied')]) === f);
+    if (sub.length === 0) continue;
+    const dir = sub.reduce((s, r) => s + parseFloat(r[colIdx('dir_hit_ctx')]), 0) / sub.length;
+    const hod = sub.reduce((s, r) => s + parseFloat(r[colIdx('hod_hit_ctx')]), 0) / sub.length;
+    rows.push(`${f},${sub.length},${dir.toFixed(3)},${hod.toFixed(3)}`);
+  }
+
+  rows.push('');
+  rows.push('=== DXY BREAKDOWN ===');
+  rows.push(`DXY direction,Days,Direction hit (ctx),Break aligned (ctx)`);
+  for (const d of ['bullish','bearish','neutral','unknown']) {
+    const sub = data.filter(r => r[colIdx('dxy_direction')] === d);
+    if (sub.length === 0) continue;
+    const dir = sub.reduce((s, r) => s + parseFloat(r[colIdx('dir_hit_ctx')]), 0) / sub.length;
+    const brk = sub.reduce((s, r) => s + parseFloat(r[colIdx('break_aligned_ctx')]), 0) / sub.length;
+    rows.push(`${d},${sub.length},${dir.toFixed(3)},${brk.toFixed(3)}`);
+  }
 
   return rows.join('\n');
 }

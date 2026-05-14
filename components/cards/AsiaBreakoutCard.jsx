@@ -4,31 +4,29 @@ import { Zap, ArrowUpRight, ArrowDownRight } from 'lucide-react';
 import { Card } from '../Card';
 import { ProgressBar, Badge } from '../primitives';
 
-export function AsiaBreakoutCard(props) {
-  const probability = 60;
-  const continuation = 55;
+export function AsiaBreakoutCard({
+  probability, upProbability, downProbability, continuation, loading, ...drag
+}) {
   return (
-    <Card {...props} title="Пробій Азійської сесії" Icon={Zap} accent="amber">
+    <Card {...drag} title="Пробій Азійської сесії" Icon={Zap} accent="amber">
       <div className="flex items-end gap-3 mb-4">
         <div className="text-5xl font-semibold tabular text-slate-900 dark:text-white tracking-tight">
-          {probability}
+          {loading ? '—' : probability}
           <span className="text-2xl text-slate-400 dark:text-slate-500">%</span>
         </div>
         <div className="text-xs text-slate-500 dark:text-slate-400 pb-2 leading-tight">
-          ймовірність
-          <br />
-          пробою
+          ймовірність<br />пробою
         </div>
       </div>
 
       <div className="flex items-center gap-2 mb-4">
         <Badge tone="amber">
           <ArrowUpRight className="w-3 h-3" />
-          Up-side 32%
+          Up-side {loading ? '—' : upProbability}%
         </Badge>
         <Badge tone="rose">
           <ArrowDownRight className="w-3 h-3" />
-          Down-side 28%
+          Down-side {loading ? '—' : downProbability}%
         </Badge>
       </div>
 
@@ -38,10 +36,10 @@ export function AsiaBreakoutCard(props) {
             Продовження руху в напрямку пробою
           </div>
           <div className="text-xs font-semibold text-slate-900 dark:text-white tabular">
-            {continuation}%
+            {loading ? '—' : `${continuation}%`}
           </div>
         </div>
-        <ProgressBar value={continuation} accent="emerald" />
+        <ProgressBar value={loading ? 0 : continuation} accent="emerald" />
       </div>
     </Card>
   );
