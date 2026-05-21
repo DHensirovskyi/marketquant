@@ -135,13 +135,16 @@ export function groupByDay(bars: Bar[]): DailyBar[] {
   return out;
 }
 
-// Бари у заданому вікні сесії (з overlap).
+// Бари у заданому вікні сесії (Asia через північ).
 function barsInSession(bars: Bar[], session: SessionId): Bar[] {
-  const { start, end } = SESSIONS[session];
   const out: Bar[] = [];
   for (const b of bars) {
     const h = parseUTC(b.datetime).getUTCHours();
-    if (h >= start && h < end) out.push(b);
+    let inSession = false;
+    if (session === 'asian')          inSession = h >= 22 || h < 6;
+    else if (session === 'london')    inSession = h >= 7  && h < 12;
+    else if (session === 'ny')        inSession = h >= 12 && h < 22;
+    if (inSession) out.push(b);
   }
   return out;
 }
@@ -667,4 +670,47 @@ export function applyContextFilter(
     sampleSize: current.length,
     globalSize: days.length,
   };
+}
+
+
+export interface SessionDirectionResult {
+  rows: {
+    session: SessionId;
+    name: string;
+    longPct: number;
+    shortPct: number;
+    sample: number;
+  }[];
+  sampleSize: number;
+}
+
+export function calcSessionDirections(days: DailyBar[]): SessionDirectionResult {
+  const counts: Record<SessionId, { long: number; short: number; total: number }> = {
+    asian:     { long: 0, short: 0, total: 0 },
+    london:    { long: 0, short: 0, total: 0 },
+    ny:        { long: 0, short: 0, total: 0 },
+  };
+
+  for (const day of days) {
+    for (const session of ['asian', 'frankfurt', 'london', 'ny'] as SessionId[]) {
+      const bars = barsInSession(day.bars, session);
+      if (bars.length === 0) continue;
+      const o = bars[0].open;
+      const c = bars[bars.length - 1].close;
+      counts[session].total++;
+      if (c > o) counts[session].long++;
+      else if (c < o) counts[session].short++;
+    }
+  }
+
+  // UI: показываем 3 сессии, Frankfurt скрыт (он в backend для полноты)
+  const rows = (['asian', 'london', 'ny'] as SessionId[]).map(s => ({
+    session: s,
+    name: SESSIONS[s].label,
+    longPct: counts[s].total > 0 ? Math.round((counts[s].long / counts[s].total) * 100) : 0,
+    shortPct: counts[s].total > 0 ? Math.round((counts[s].short / counts[s].total) * 100) : 0,
+    sample: counts[s].total,
+  }));
+
+  return { rows, sampleSize: days.length };
 }

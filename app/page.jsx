@@ -17,6 +17,7 @@ import { useMetrics } from '@/hooks/useMetrics';
 import { getForexStatus } from '@/utils/marketHours';
 import { calcLiveStats } from '@/utils/quantMath';
 import { ContextBanner } from '@/components/ContextBanner';
+import { SessionDirectionsCard } from '@/components/cards/SessionDirectionsCard';
 
 // ─── Тема ────────────────────────────────────────────────────────────────
 function useTheme() {
@@ -119,7 +120,7 @@ export default function Page() {
   // ── DnD ──
   const initialOrder = [
     'asr', 'asia-breakout', 'session-extremes',
-    'correlation', 'inside-bar', 'weekday-extremes', 'ny-midnight',
+    'correlation', 'session-directions', 'weekday-extremes', 'ny-midnight',
   ];
   const [order, setOrder] = useState(initialOrder);
   const [draggingId, setDraggingId]     = useState(null);
@@ -182,10 +183,11 @@ export default function Page() {
         value={m.correlations[correlationPair]} loading={loading}
       />
     ),
-    'inside-bar': (
-      <InsideBarCard {...cardProps('inside-bar')}
-        probability={m.insideBar.probability}
-        byWeekday={m.insideBar.byWeekday}
+    'session-directions': (
+      <SessionDirectionsCard
+        {...cardProps('session-directions')}
+        rows={m.sessionDirections.rows}
+        sampleSize={m.sessionDirections.sampleSize}
         loading={loading}
       />
     ),

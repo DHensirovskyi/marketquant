@@ -4,7 +4,7 @@ import {
   Bar, CorrelationPair, SessionId,
   groupByDay, applyContextFilter,
   calcASR, calcAsiaBreakout, calcSessionExtremes,
-  calcCorrelations, calcInsideBar, calcWeekdayExtremes, calcNYMidnight,
+  calcCorrelations, calcInsideBar, calcWeekdayExtremes, calcNYMidnight, calcSessionDirections
 } from '@/utils/quantMath';
 import { extractAsiaContext } from '@/utils/asiaContext';
 
@@ -57,6 +57,10 @@ export function useMetrics(bars: Bar[] | null | undefined, config: MetricsConfig
 
   const asiaBreakout    = useMemo(() => calcAsiaBreakout(baseDays),    [baseDays]);
   const sessionExtremes = useMemo(() => calcSessionExtremes(baseDays), [baseDays]);
+  const sessionDirections = useMemo(
+  () => calcSessionDirections(baseDays),
+  [baseDays]
+);
   const correlations    = useMemo(() => calcCorrelations(baseDays),    [baseDays]);
   const insideBar       = useMemo(() => calcInsideBar(baseDays),       [baseDays]);
   const weekdayExtremes = useMemo(() => calcWeekdayExtremes(baseDays), [baseDays]);
@@ -69,7 +73,7 @@ export function useMetrics(bars: Bar[] | null | undefined, config: MetricsConfig
     ready: allDays.length > 0,
     sampleDays: allDays.length,
     asiaContext, filtered,
-    asr, asiaBreakout, sessionExtremes, correlations,
+    asr, asiaBreakout, sessionExtremes, correlations, sessionDirections,
     insideBar, weekdayExtremes, nyMidnight,
   };
 }
