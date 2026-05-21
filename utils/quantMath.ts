@@ -67,8 +67,8 @@ export function calcLiveStats(bars: Bar[]): LiveStats | null {
 // Сесії за умовою користувача (UTC). Перекриваються.
 export const SESSIONS: Record<SessionId, { start: number; end: number; label: string }> = {
   asian:  { start: 0,  end: 8,  label: 'Азія' },
-  london: { start: 8,  end: 16, label: 'Лондон' },
-  ny:     { start: 13, end: 22, label: 'Нью-Йорк' },
+  london: { start: 8,  end: 13, label: 'Лондон' },
+  ny:     { start: 13, end: 24, label: 'Нью-Йорк' },
 };
 
 const PIP = 0.0001;                         // EUR/USD
@@ -141,9 +141,9 @@ function barsInSession(bars: Bar[], session: SessionId): Bar[] {
   for (const b of bars) {
     const h = parseUTC(b.datetime).getUTCHours();
     let inSession = false;
-    if (session === 'asian')          inSession = h >= 22 || h < 6;
-    else if (session === 'london')    inSession = h >= 7  && h < 12;
-    else if (session === 'ny')        inSession = h >= 12 && h < 22;
+    if (session === 'asian')       inSession = h >= 0  && h < 8;
+    else if (session === 'london') inSession = h >= 8  && h < 13;
+    else if (session === 'ny')     inSession = h >= 13 && h < 24;
     if (inSession) out.push(b);
   }
   return out;
