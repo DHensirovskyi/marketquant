@@ -26,18 +26,21 @@ function dayDirection(day: DailyBar): 'LONG' | 'SHORT' | 'NEUTRAL' {
 
 function sessionOfBar(b: Bar): SessionId | null {
   const h = hourOf(b);
-  if (h >= 0  && h < 8)  return 'asian';
-  if (h >= 8  && h < 13) return 'london';
-  if (h >= 13 && h < 24) return 'ny';
+  if (h >= 22 || h < 6)  return 'asian';
+  if (h >= 6  && h < 12) return 'london';
+  if (h >= 12 && h < 22) return 'ny';
   return null;
 }
 
 function sessionRangePips(day: DailyBar, s: SessionId): number {
-  const range = { asian: [0,8], london: [8,16], ny: [13,22] }[s];
   let hi = -Infinity, lo = Infinity, found = false;
   for (const b of day.bars) {
     const h = hourOf(b);
-    if (h >= range[0] && h < range[1]) {
+    let inSess = false;
+    if (s === 'asian')       inSess = h >= 22 || h < 6;
+    else if (s === 'london') inSess = h >= 6 && h < 12;
+    else if (s === 'ny')     inSess = h >= 12 && h < 22;
+    if (inSess) {
       found = true;
       if (b.high > hi) hi = b.high;
       if (b.low  < lo) lo = b.low;
@@ -70,9 +73,10 @@ function extractDayFacts(day: DailyBar, prev: DailyBar | null, nyMidDist: number
   const WD = ['Нд','Пн','Вт','Ср','Чт','Пт','Сб'][day.dayOfWeek];
 
   let aH = -Infinity, aL = Infinity, aFound = false;
-  for (const b of day.bars) {
-    if (hourOf(b) < 8) {
-      aFound = true;
+for (const b of day.bars) {
+  const h = hourOf(b);
+  if (h >= 22 || h < 6) {
+    aFound = true;
       if (b.high > aH) aH = b.high;
       if (b.low  < aL) aL = b.low;
     }
@@ -82,7 +86,7 @@ function extractDayFacts(day: DailyBar, prev: DailyBar | null, nyMidDist: number
   if (aFound) {
     for (const b of day.bars) {
       const h = hourOf(b);
-      if (h < 8 || h >= 22) continue;
+if (h < 6 || h >= 22) continue;   // London [7,12) + NY [12,22)
       if (!upHit   && b.high > aH) { upHit = true;   if (firstDir==='NONE') firstDir='UP'; }
       if (!downHit && b.low  < aL) { downHit = true; if (firstDir==='NONE') firstDir='DOWN'; }
       if (upHit && downHit) break;
@@ -112,13 +116,13 @@ function extractDayFacts(day: DailyBar, prev: DailyBar | null, nyMidDist: number
     const thr = nyMidDist * PIP;
     for (const b of day.bars) {
       const h = hourOf(b);
-      if (h < 8 || h >= 16) continue;
+if (h < 6 || h >= 12) continue;
       if (b.high - mOpen >= thr || mOpen - b.low >= thr) { nymTrig = true; break; }
     }
     if (nymTrig) {
       for (const b of day.bars) {
         const h = hourOf(b);
-        if (h < 13 || h >= 22) continue;
+if (h < 12 || h >= 22) continue;
         if (b.low <= mOpen && b.high >= mOpen) { nymRetouch = true; break; }
       }
     }

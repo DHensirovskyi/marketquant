@@ -54,13 +54,18 @@ export function extractAsiaContext(
     dxyDirection: 'unknown', dxyChangePct: 0,
   };
 
-  if (nowUTC.getUTCHours() < 8) {
-    return { ...empty, reason: 'before_london' };
-  }
+  const nowHour = nowUTC.getUTCHours();
+const asiaClosed = nowHour >= 6 && nowHour < 22;
+if (!asiaClosed) {
+  return { ...empty, reason: 'asia_in_progress' };
+}
   if (!liveBars || liveBars.length === 0) return empty;
 
   // Asia bars: [0, 8) UTC
-  const asia = liveBars.filter(b => hourOf(b) < 8);
+  const asia = liveBars.filter(b => {
+  const h = hourOf(b);
+  return h >= 22 || h < 6;
+});
   if (asia.length === 0) return { ...empty, reason: 'no_asia_bars' };
 
   let h = -Infinity, l = Infinity;

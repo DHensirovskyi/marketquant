@@ -66,9 +66,9 @@ export function calcLiveStats(bars: Bar[]): LiveStats | null {
 
 // Сесії за умовою користувача (UTC). Перекриваються.
 export const SESSIONS: Record<SessionId, { start: number; end: number; label: string }> = {
-  asian:  { start: 0,  end: 8,  label: 'Азія' },
-  london: { start: 8,  end: 13, label: 'Лондон' },
-  ny:     { start: 13, end: 24, label: 'Нью-Йорк' },
+  asian:  { start: 22, end: 6,  label: 'Азія' },
+  london: { start: 6,  end: 12, label: 'Лондон' },
+  ny:     { start: 12, end: 22, label: 'Нью-Йорк' },
 };
 
 const PIP = 0.0001;                         // EUR/USD
@@ -83,10 +83,14 @@ function parseUTC(dt: string): Date {
   return new Date(dt.replace(' ', 'T') + 'Z');
 }
 function dateKey(d: Date): string {
+  const tradeDay = new Date(d);
+  if (d.getUTCHours() >= 22) {
+    tradeDay.setUTCDate(d.getUTCDate() + 1);
+  }
   return (
-    d.getUTCFullYear() +
-    '-' + String(d.getUTCMonth() + 1).padStart(2, '0') +
-    '-' + String(d.getUTCDate()).padStart(2, '0')
+    tradeDay.getUTCFullYear() +
+    '-' + String(tradeDay.getUTCMonth() + 1).padStart(2, '0') +
+    '-' + String(tradeDay.getUTCDate()).padStart(2, '0')
   );
 }
 
@@ -141,9 +145,9 @@ function barsInSession(bars: Bar[], session: SessionId): Bar[] {
   for (const b of bars) {
     const h = parseUTC(b.datetime).getUTCHours();
     let inSession = false;
-    if (session === 'asian')       inSession = h >= 0  && h < 8;
-    else if (session === 'london') inSession = h >= 8  && h < 13;
-    else if (session === 'ny')     inSession = h >= 13 && h < 24;
+    if (session === 'asian')       inSession = h >= 22 || h < 6;
+    else if (session === 'london') inSession = h >= 6  && h < 12;
+    else if (session === 'ny')     inSession = h >= 12 && h < 22;
     if (inSession) out.push(b);
   }
   return out;
@@ -163,9 +167,9 @@ function sessionRange(bars: Bar[], session: SessionId): { high: number; low: num
 // Non-overlapping корзина для HOD/LOD: Asia[0,8) London[8,13) NY[13,22)
 function classifyBarSession(b: Bar): SessionId | null {
   const h = parseUTC(b.datetime).getUTCHours();
-  if (h >= 0  && h < 8)  return 'asian';
-  if (h >= 8  && h < 13) return 'london';
-  if (h >= 13 && h < 24) return 'ny';
+  if (h >= 22 || h < 6)  return 'asian';
+  if (h >= 6  && h < 12) return 'london';
+  if (h >= 12 && h < 22) return 'ny';
   return null;
 }
 
@@ -251,7 +255,7 @@ export function calcAsiaBreakout(days: DailyBar[]): AsiaBreakoutResult {
     const post: Bar[] = [];
     for (const b of day.bars) {
       const h = parseUTC(b.datetime).getUTCHours();
-      if (h >= 8 && h < 22) post.push(b);
+      if (h >= 6 && h < 22) post.push(b);
     }
     if (post.length === 0) continue;
     total++;
@@ -486,7 +490,7 @@ export function calcNYMidnight(days: DailyBar[], distancePips: number): NYMidnig
     let triggered = false;
     for (const b of day.bars) {
       const h = parseUTC(b.datetime).getUTCHours();
-      if (h < 8 || h >= 16) continue;
+      if (h < 6 || h >= 12) continue;   // London [6,12)
       if (b.high - mOpen >= threshold || mOpen - b.low >= threshold) { triggered = true; break; }
     }
     if (!triggered) continue;
@@ -495,7 +499,7 @@ export function calcNYMidnight(days: DailyBar[], distancePips: number): NYMidnig
     // NY
     for (const b of day.bars) {
       const h = parseUTC(b.datetime).getUTCHours();
-      if (h < 13 || h >= 22) continue;
+      if (h < 12 || h >= 22) continue;  // NY [12,22)
       if (b.low <= mOpen && b.high >= mOpen) { retouches++; break; }
     }
   }
@@ -529,7 +533,7 @@ function asiaWidthOfDay(day: DailyBar, adr: number): AsiaWidth {
   let h = -Infinity, l = Infinity, found = false;
   for (const b of day.bars) {
     const hr = new Date(b.datetime.replace(' ', 'T') + 'Z').getUTCHours();
-    if (hr < 8) {
+if (hr >= 22 || hr < 6) {
       found = true;
       if (b.high > h) h = b.high;
       if (b.low  < l) l = b.low;
@@ -544,7 +548,7 @@ function asiaDirectionOfDay(day: DailyBar): AsiaDirection {
   let firstAsia: Bar | null = null, lastAsia: Bar | null = null;
   for (const b of day.bars) {
     const hr = new Date(b.datetime.replace(' ', 'T') + 'Z').getUTCHours();
-    if (hr < 8) {
+if (hr >= 22 || hr < 6) {
       if (!firstAsia) firstAsia = b;
       lastAsia = b;
     }
@@ -560,7 +564,7 @@ function asiaSweepOfDay(day: DailyBar, prev: DailyBar | null): SweepKind {
   let h = -Infinity, l = Infinity;
   for (const b of day.bars) {
     const hr = new Date(b.datetime.replace(' ', 'T') + 'Z').getUTCHours();
-    if (hr < 8) {
+if (hr >= 22 || hr < 6) {
       if (b.high > h) h = b.high;
       if (b.low  < l) l = b.low;
     }

@@ -26,9 +26,9 @@ export function MarketClock() {
   const day = now.getUTCDay();
   const weekday = day >= 1 && day <= 5;
   const sessions = [
-    { key: 'asia', label: 'Азія', start: 0, end: 9 },
-    { key: 'london', label: 'Лондон', start: 7, end: 16 },
-    { key: 'ny', label: 'Нью-Йорк', start: 13, end: 22 },
+    { key: 'asia', label: 'Азія', start: 22, end: 6 },
+    { key: 'london', label: 'Лондон', start: 6, end: 12 },
+    { key: 'ny', label: 'Нью-Йорк', start: 12, end: 22 },
   ];
   const active = weekday ? sessions.filter((s) => h >= s.start && h < s.end) : [];
   const isOpen = active.length > 0;
