@@ -10,7 +10,6 @@ import { ASRCard } from '@/components/cards/ASRCard';
 import { AsiaBreakoutCard } from '@/components/cards/AsiaBreakoutCard';
 import { SessionExtremesCard } from '@/components/cards/SessionExtremesCard';
 import { CorrelationCard } from '@/components/cards/CorrelationCard';
-import { InsideBarCard } from '@/components/cards/InsideBarCard';
 import { WeekdayExtremesCard } from '@/components/cards/WeekdayExtremesCard';
 import { NYMidnightCard } from '@/components/cards/NYMidnightCard';
 import { useMetrics } from '@/hooks/useMetrics';
@@ -175,12 +174,6 @@ export default function Page() {
     'session-extremes': (
       <SessionExtremesCard {...cardProps('session-extremes')}
         rows={m.sessionExtremes.rows} loading={loading}
-      />
-    ),
-    'correlation': (
-      <CorrelationCard {...cardProps('correlation')}
-        pair={correlationPair} onPairChange={setCorrelationPair}
-        value={m.correlations[correlationPair]} loading={loading}
       />
     ),
     'session-directions': (

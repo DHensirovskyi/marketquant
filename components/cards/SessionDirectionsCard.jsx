@@ -1,61 +1,63 @@
 'use client';
 
-import { Compass, TrendingUp, TrendingDown } from 'lucide-react';
+import { Compass, ArrowDownRight, ArrowUpRight } from 'lucide-react';
 import { Card } from '../Card';
+
+function DirectionBlock({ pct, label, tone, Icon, loading }) {
+  const styles = tone === 'short'
+    ? {
+        bg: 'bg-rose-100 dark:bg-rose-950/40',
+        text: 'text-rose-600 dark:text-rose-400',
+        labelColor: 'text-rose-700 dark:text-rose-400',
+      }
+    : {
+        bg: 'bg-emerald-100 dark:bg-emerald-950/40',
+        text: 'text-emerald-600 dark:text-emerald-400',
+        labelColor: 'text-emerald-700 dark:text-emerald-400',
+      };
+
+  return (
+    <div className={`flex-1 rounded-2xl ${styles.bg} flex flex-col items-center justify-center py-5 px-4 gap-2`}>
+      <span className={`text-sm font-medium ${styles.labelColor}`}>{label}</span>
+      <Icon className={`w-6 h-6 ${styles.text}`} strokeWidth={2.5} />
+      <span className={`text-2xl font-semibold tabular ${styles.text}`}>
+        {loading ? '—' : `${pct}%`}
+      </span>
+    </div>
+  );
+}
 
 export function SessionDirectionsCard({ rows = [], sampleSize = 0, loading, ...drag }) {
   return (
-    <Card {...drag} title="Напрямок по сесіях" Icon={Compass} accent="indigo">
-      <div className="flex items-center justify-between mb-3 text-xs">
-        <div className="flex items-center gap-3">
-          <span className="flex items-center gap-1.5 text-slate-600 dark:text-slate-400">
-            <span className="w-2.5 h-2.5 rounded-sm bg-emerald-500 dark:bg-emerald-400" /> Long
-          </span>
-          <span className="flex items-center gap-1.5 text-slate-600 dark:text-slate-400">
-            <span className="w-2.5 h-2.5 rounded-sm bg-rose-500 dark:bg-rose-400" /> Short
-          </span>
-        </div>
-        <span className="text-slate-400 dark:text-slate-500 tabular">
-          n={loading ? '—' : sampleSize}
-        </span>
+    <Card {...drag} title="Напрямок" Icon={Compass} accent="indigo">
+      <div className="flex items-center justify-end mb-3 text-xs text-slate-400 dark:text-slate-500 tabular">
+        n={loading ? '—' : sampleSize}
       </div>
 
-      <div className="space-y-3">
-        {rows.map((row) => {
-          const dominant =
-            row.longPct > row.shortPct ? 'long'
-            : row.shortPct > row.longPct ? 'short' : 'neutral';
-          return (
-            <div key={row.session}>
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-xs font-medium text-slate-700 dark:text-slate-300">
-                  {row.name}
-                </span>
-                <span className="flex items-center gap-1 text-xs tabular">
-                  {dominant === 'long' && <TrendingUp className="w-3 h-3 text-emerald-500" />}
-                  {dominant === 'short' && <TrendingDown className="w-3 h-3 text-rose-500" />}
-                  <span className="text-emerald-600 dark:text-emerald-400 font-medium">
-                    {loading ? '—' : `${row.longPct}%`}
-                  </span>
-                  <span className="text-slate-300 dark:text-slate-600">/</span>
-                  <span className="text-rose-600 dark:text-rose-400 font-medium">
-                    {loading ? '—' : `${row.shortPct}%`}
-                  </span>
-                </span>
-              </div>
-              <div className="flex h-2 rounded-sm overflow-hidden bg-slate-100 dark:bg-slate-800">
-                <div
-                  className="bg-emerald-500 dark:bg-emerald-400 transition-all duration-700"
-                  style={{ width: `${loading ? 0 : row.longPct}%` }}
-                />
-                <div
-                  className="bg-rose-500 dark:bg-rose-400 transition-all duration-700"
-                  style={{ width: `${loading ? 0 : row.shortPct}%` }}
-                />
-              </div>
+      <div className="space-y-4">
+        {rows.map((row) => (
+          <div key={row.session}>
+            <div className="text-center text-xs font-medium text-slate-500 dark:text-slate-400 mb-2">
+              {row.name}
             </div>
-          );
-        })}
+            <div className="flex gap-2.5">
+              <DirectionBlock
+                pct={row.shortPct}
+                label="Шорт"
+                tone="short"
+                Icon={ArrowDownRight}
+                loading={loading}
+              />
+              <DirectionBlock
+                pct={row.longPct}
+                label="Лонг"
+                tone="long"
+                Icon={ArrowUpRight}
+                loading={loading}
+              />
+            </div>
+          </div>
+        ))}
       </div>
     </Card>
   );
