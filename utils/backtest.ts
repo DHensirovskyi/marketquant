@@ -86,7 +86,7 @@ for (const b of day.bars) {
   if (aFound) {
     for (const b of day.bars) {
       const h = hourOf(b);
-if (h < 6 || h >= 22) continue;   // London [7,12) + NY [12,22)
+if (h < 6 || h >= 22) continue;   // London [6,12) + NY [12,22)
       if (!upHit   && b.high > aH) { upHit = true;   if (firstDir==='NONE') firstDir='UP'; }
       if (!downHit && b.low  < aL) { downHit = true; if (firstDir==='NONE') firstDir='DOWN'; }
       if (upHit && downHit) break;
@@ -181,7 +181,7 @@ function predict(history: DailyBar[], nyMidDist: number): DayPrediction {
   const predDir: 'LONG' | 'SHORT' = longPct >= shortPct ? 'LONG' : 'SHORT';
   const predDirProb = Math.round(Math.max(longPct, shortPct));
 
-  const sessionHours: Record<SessionId, number> = { asian: 8, london: 5, ny: 11 };
+const sessionHours: Record<SessionId, number> = { asian: 8, london: 6, ny: 10 };
   const se = calcSessionExtremes(history);
   const argmaxDensity = (key: 'hodPct' | 'lodPct'): SessionId => {
     let bestS: SessionId = 'london', bestDensity = -1;

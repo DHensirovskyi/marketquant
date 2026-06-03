@@ -10,7 +10,6 @@ import { ASRCard } from '@/components/cards/ASRCard';
 import { AsiaBreakoutCard } from '@/components/cards/AsiaBreakoutCard';
 import { SessionExtremesCard } from '@/components/cards/SessionExtremesCard';
 import { CorrelationCard } from '@/components/cards/CorrelationCard';
-import { InsideBarCard } from '@/components/cards/InsideBarCard';
 import { WeekdayExtremesCard } from '@/components/cards/WeekdayExtremesCard';
 import { NYMidnightCard } from '@/components/cards/NYMidnightCard';
 import { useMetrics } from '@/hooks/useMetrics';
@@ -177,12 +176,6 @@ export default function Page() {
         rows={m.sessionExtremes.rows} loading={loading}
       />
     ),
-    'correlation': (
-      <CorrelationCard {...cardProps('correlation')}
-        pair={correlationPair} onPairChange={setCorrelationPair}
-        value={m.correlations[correlationPair]} loading={loading}
-      />
-    ),
     'session-directions': (
       <SessionDirectionsCard
         {...cardProps('session-directions')}
@@ -224,9 +217,9 @@ export default function Page() {
         {!marketStatus.isOpen && !showAnyway ? (
           <MarketClosedBanner status={marketStatus} onForceShow={() => setShowAnyway(true)} />
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 auto-rows-fr">
+          <div className="columns-1 sm:columns-2 lg:columns-3 xl:columns-4 gap-4">
             {order.map((id) => (
-              <div key={id} className={id === 'weekday-extremes' ? 'lg:col-span-2' : ''}>
+              <div key={id} className="mb-4 break-inside-avoid">
                 {renderById[id]}
               </div>
             ))}

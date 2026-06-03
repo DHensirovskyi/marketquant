@@ -696,7 +696,7 @@ export function calcSessionDirections(days: DailyBar[]): SessionDirectionResult 
   };
 
   for (const day of days) {
-    for (const session of ['asian', 'frankfurt', 'london', 'ny'] as SessionId[]) {
+    for (const session of ['asian', 'london', 'ny'] as SessionId[]) {
       const bars = barsInSession(day.bars, session);
       if (bars.length === 0) continue;
       const o = bars[0].open;
